@@ -1,4 +1,5 @@
-'use strict';
+import { extractJobFromPage } from '../lib/extractJob.js';
+import { parseBackendUrl, isValidUuid } from '../lib/validate.js';
 
 const DEFAULT_BACKEND = 'http://localhost:8000';
 
@@ -72,84 +73,6 @@ function setLoading(on, label = 'Working…') {
 
 function updateTailorBtn() {
   btnTailor.disabled = !(state.resumeId && state.jobData?.description);
-}
-
-// ── Job extraction (runs inside the active tab via scripting.executeScript) ───
-// Must be self-contained — no references to outer scope.
-function extractJobFromPage() {
-  function getText(...selectors) {
-    for (const sel of selectors) {
-      try {
-        const el = document.querySelector(sel);
-        if (el && el.innerText && el.innerText.trim()) return el.innerText.trim();
-      } catch (_) {
-        // ignore invalid selectors
-      }
-    }
-    return '';
-  }
-
-  const host = window.location.hostname;
-
-  if (host.includes('linkedin.com')) {
-    return {
-      title:       getText('h1.t-24', '.job-details-jobs-unified-top-card__job-title h1'),
-      company:     getText('.job-details-jobs-unified-top-card__company-name a'),
-      description: getText('.jobs-description-content__text', '.jobs-description__content'),
-      source:      'LinkedIn',
-    };
-  }
-  if (host.includes('indeed.com')) {
-    return {
-      title:       getText('h1[data-testid="jobsearch-JobInfoHeader-title"]', 'h1.jobsearch-JobInfoHeader-title'),
-      company:     getText('[data-company-name]', '.jobsearch-CompanyInfoWithoutHeaderImage a'),
-      description: getText('#jobDescriptionText'),
-      source:      'Indeed',
-    };
-  }
-  if (host.includes('greenhouse.io')) {
-    return {
-      title:       getText('h1.app-title', '.job-post h1', 'h1'),
-      company:     getText('.company-name') ||
-                   (document.title.includes(' at ')
-                     ? document.title.split(' at ').slice(1).join(' at ').trim()
-                     : ''),
-      description: getText('#content', '.section-wrapper'),
-      source:      'Greenhouse',
-    };
-  }
-  if (host.includes('lever.co')) {
-    return {
-      title:       getText('.posting-headline h2', 'h2'),
-      company:     getText('.posting-headline h3', '.posting-category'),
-      description: getText('.posting-description', '[class*="content-wrapper"]'),
-      source:      'Lever',
-    };
-  }
-  if (host.includes('glassdoor.com')) {
-    return {
-      title:       getText('[data-test="jobTitle"]'),
-      company:     getText('[data-test="employer-name"]'),
-      description: getText('[class*="jobDescriptionContent"]', '[class*="JobDetails_jobDescription"]'),
-      source:      'Glassdoor',
-    };
-  }
-  if (host.includes('workday.com') || host.includes('myworkdayjobs.com')) {
-    return {
-      title:       getText('[data-automation-id="jobPostingHeader"]'),
-      company:     getText('[data-automation-id="selectedOrganization"]'),
-      description: getText('[data-automation-id="job-posting-details"]'),
-      source:      'Workday',
-    };
-  }
-
-  // Generic fallback — try common patterns
-  return {
-    title:       document.querySelector('h1')?.innerText?.trim() || document.title,
-    company:     '',
-    description: document.querySelector('[class*="description"], [id*="description"]')?.innerText?.trim() || '',
-    source:      'Generic',
-  };
 }
 
 const FETCH_TIMEOUT_MS = 120_000; // 2 min — LLM calls can be slow
@@ -297,29 +220,16 @@ btnUploadResume.addEventListener('click', async () => {
 });
 
 btnSaveSettings.addEventListener('click', async () => {
-  const rawUrl   = inputBackendUrl.value.trim().replace(/\/$/, '') || DEFAULT_BACKEND;
   const resumeId = inputResumeId.value.trim();
 
-  // Validate URL format and restrict to localhost (host_permissions only covers localhost)
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    showMsg(msgSettings, 'Backend URL is not a valid URL (e.g. http://localhost:8000).', 'error');
+  const urlResult = parseBackendUrl(inputBackendUrl.value, DEFAULT_BACKEND);
+  if (urlResult.error) {
+    showMsg(msgSettings, urlResult.error, 'error');
     return;
   }
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    showMsg(msgSettings, 'Backend URL must start with http:// or https://.', 'error');
-    return;
-  }
-  const isLocalhost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
-  if (!isLocalhost) {
-    showMsg(msgSettings, 'Non-localhost URLs require updating host_permissions in the extension manifest.', 'error');
-    return;
-  }
-  const backendUrl = rawUrl;
+  const backendUrl = urlResult.url;
 
-  if (resumeId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resumeId)) {
+  if (resumeId && !isValidUuid(resumeId)) {
     showMsg(msgSettings, 'Resume ID must be a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).', 'error');
     return;
   }

@@ -32,6 +32,8 @@ const msgNoJob          = $('msg-no-job');
 const resumeBadge       = $('resume-badge');
 const badgeResumeId     = $('badge-resume-id');
 const btnTailor         = $('btn-tailor');
+const btnSaveTracker    = $('btn-save-tracker');
+const msgTracker        = $('msg-tracker');
 const msgMain           = $('msg-main');
 
 const resultScore       = $('result-score');
@@ -72,10 +74,13 @@ function setLoading(on, label = 'Working…') {
 }
 
 function updateTailorBtn() {
-  btnTailor.disabled = !(state.resumeId && state.jobData?.description);
+  const ready = !!(state.resumeId && state.jobData?.description);
+  btnTailor.disabled = !ready;
+  btnSaveTracker.disabled = !ready;
 }
 
 const FETCH_TIMEOUT_MS = 120_000; // 2 min — LLM calls can be slow
+const MAX_JD_CHARS    = 8000;
 
 function fetchWithTimeout(url, options) {
   const controller = new AbortController();
@@ -245,9 +250,49 @@ btnSaveSettings.addEventListener('click', async () => {
   setTimeout(() => { panelSettings.hidden = true; }, 1000);
 });
 
-// ── Tailor flow ───────────────────────────────────────────────────────────────
-const MAX_JD_CHARS = 8000;
+// ── Save to Tracker ───────────────────────────────────────────────────────────
+btnSaveTracker.addEventListener('click', async () => {
+  hideMsg(msgTracker);
+  btnSaveTracker.disabled = true;
+  try {
+    await apiPost('/api/v1/applications', {
+      resume_id:       state.resumeId,
+      job_description: state.jobData.description.slice(0, MAX_JD_CHARS),
+      company:         state.jobData.company || undefined,
+      role:            state.jobData.title   || undefined,
+      status:          'saved',
+    });
 
+    // Build success message with a "View in Tracker" link
+    msgTracker.innerHTML = '';
+    msgTracker.className = 'msg success';
+    msgTracker.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+    msgTracker.hidden = false;
+
+    const text = document.createElement('span');
+    text.textContent = 'Saved to Tracker ✓';
+    msgTracker.appendChild(text);
+
+    const link = document.createElement('a');
+    link.textContent = 'View in Tracker →';
+    link.className = 'tracker-link';
+    link.addEventListener('click', () => {
+      try {
+        const parsed = new URL(state.backendUrl);
+        chrome.tabs.create({ url: `${parsed.protocol}//${parsed.hostname}:3000/tracker` });
+      } catch {
+        chrome.tabs.create({ url: 'http://localhost:3000/tracker' });
+      }
+    });
+    msgTracker.appendChild(link);
+  } catch (e) {
+    showMsg(msgTracker, `Could not save: ${e.message}`, 'error');
+    // Re-enable on error so the user can retry
+    btnSaveTracker.disabled = !(state.resumeId && state.jobData?.description);
+  }
+});
+
+// ── Tailor flow ───────────────────────────────────────────────────────────────
 btnTailor.addEventListener('click', async () => {
   hideMsg(msgMain);
   setLoading(true, 'Uploading job…');

@@ -259,6 +259,20 @@ button.secondary:hover { background: #e0e0d8; }
 }
 #recs-list li:first-child { border-top: none; }
 
+/* ── Tracker success link ─────────────────────────────────────────────────── */
+.tracker-link {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* ── Loading overlay ──────────────────────────────────────────────────────── */
 #loading-overlay {
   position: fixed;

@@ -53,7 +53,42 @@
       </div>
 
       <button type="button" id="btn-tailor" disabled>Tailor Resume</button>
+      <button type="button" id="btn-quick-scan" class="ghost" disabled>&#9889; Quick Keyword Scan</button>
       <p id="msg-main" class="msg" hidden></p>
+    </section>
+
+    <!-- Keyword scan panel -->
+    <section id="panel-scan" hidden>
+      <div class="scan-header">
+        <button type="button" id="btn-scan-back" class="back-link">&#8592; Back</button>
+        <span id="scan-job-title" class="scan-job-title"></span>
+      </div>
+      <div class="scan-score-wrap">
+        <div class="scan-score-top">
+          <span class="scan-score-label">Keyword Match</span>
+          <span id="scan-pct" class="scan-pct"></span>
+        </div>
+        <div class="scan-bar-track"><div id="scan-bar-fill" class="scan-bar-fill"></div></div>
+      </div>
+      <div id="scan-found" class="kw-group" hidden>
+        <p class="kw-group-label">
+          <span class="kw-dot kw-dot-found"></span>
+          <span id="scan-found-label"></span>
+        </p>
+        <div id="scan-found-chips" class="kw-chips"></div>
+      </div>
+      <div id="scan-missing" class="kw-group" hidden>
+        <p class="kw-group-label">
+          <span class="kw-dot kw-dot-missing"></span>
+          <span id="scan-missing-label"></span>
+        </p>
+        <div id="scan-missing-chips" class="kw-chips"></div>
+      </div>
+      <div class="scan-cta">
+        <span class="scan-cta-hint">Want AI-rewritten bullets that add these keywords?</span>
+        <button type="button" id="btn-scan-tailor" class="scan-cta-btn">Full Tailor &#8594;</button>
+      </div>
+      <p id="msg-scan" class="msg" hidden></p>
     </section>
 
     <!-- Result panel -->

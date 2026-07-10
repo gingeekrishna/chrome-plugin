@@ -32,7 +32,22 @@ const msgNoJob          = $('msg-no-job');
 const resumeBadge       = $('resume-badge');
 const badgeResumeId     = $('badge-resume-id');
 const btnTailor         = $('btn-tailor');
+const btnQuickScan      = $('btn-quick-scan');
 const msgMain           = $('msg-main');
+
+const panelScan         = $('panel-scan');
+const scanJobTitle      = $('scan-job-title');
+const scanPct           = $('scan-pct');
+const scanBarFill       = $('scan-bar-fill');
+const scanFound         = $('scan-found');
+const scanFoundLabel    = $('scan-found-label');
+const scanFoundChips    = $('scan-found-chips');
+const scanMissing       = $('scan-missing');
+const scanMissingLabel  = $('scan-missing-label');
+const scanMissingChips  = $('scan-missing-chips');
+const btnScanBack       = $('btn-scan-back');
+const btnScanTailor     = $('btn-scan-tailor');
+const msgScan           = $('msg-scan');
 
 const resultScore       = $('result-score');
 const resultKeywords    = $('result-keywords');
@@ -72,7 +87,9 @@ function setLoading(on, label = 'Working…') {
 }
 
 function updateTailorBtn() {
-  btnTailor.disabled = !(state.resumeId && state.jobData?.description);
+  const ready = !!(state.resumeId && state.jobData?.description);
+  btnTailor.disabled    = !ready;
+  btnQuickScan.disabled = !ready;
 }
 
 const FETCH_TIMEOUT_MS = 120_000; // 2 min — LLM calls can be slow
@@ -245,9 +262,80 @@ btnSaveSettings.addEventListener('click', async () => {
   setTimeout(() => { panelSettings.hidden = true; }, 1000);
 });
 
-// ── Tailor flow ───────────────────────────────────────────────────────────────
+// ── Keyword scan flow ─────────────────────────────────────────────────────────
 const MAX_JD_CHARS = 8000;
 
+function renderScanPanel(data) {
+  scanJobTitle.textContent = state.jobData?.title || 'Keyword Scan';
+
+  const pct       = Math.round(data.match_score ?? 0);
+  const colorCls  = pct >= 75 ? 'good' : pct >= 50 ? 'ok' : 'bad';
+  scanPct.textContent = pct;
+  scanPct.className   = `scan-pct ${colorCls}`;
+  scanBarFill.style.width = `${pct}%`;
+  scanBarFill.className   = `scan-bar-fill ${colorCls}`;
+
+  function fillChips(container, labelEl, groupEl, keywords, chipClass, labelText) {
+    if (keywords?.length) {
+      container.innerHTML = '';
+      keywords.forEach((kw) => {
+        const chip = document.createElement('span');
+        chip.className   = `kw-chip ${chipClass}`;
+        chip.textContent = kw;
+        container.appendChild(chip);
+      });
+      labelEl.textContent = `${labelText} (${keywords.length})`;
+      groupEl.hidden = false;
+    } else {
+      groupEl.hidden = true;
+    }
+  }
+
+  fillChips(scanFoundChips,   scanFoundLabel,   scanFound,   data.matched_keywords, 'kw-chip-found',   'Found in your resume');
+  fillChips(scanMissingChips, scanMissingLabel, scanMissing, data.missing_keywords,  'kw-chip-missing', 'Missing — add these');
+}
+
+btnQuickScan.addEventListener('click', async () => {
+  hideMsg(msgMain);
+  setLoading(true, 'Scanning keywords…');
+
+  try {
+    const description = state.jobData.description.slice(0, MAX_JD_CHARS);
+    const jobRes = await apiPost('/api/v1/jobs/upload', {
+      job_descriptions: [description],
+      resume_id: state.resumeId,
+    });
+    if (!jobRes.job_id?.length) throw new Error('Backend returned no job ID.');
+    const jobId = jobRes.job_id[0];
+
+    const scanRes = await apiPost('/api/v1/resumes/ats-score', {
+      resume_id: state.resumeId,
+      job_id:    jobId,
+    });
+
+    renderScanPanel(scanRes);
+    panelMain.hidden = true;
+    panelScan.hidden = false;
+  } catch (e) {
+    showMsg(msgMain, `Scan failed: ${e.message}`, 'error');
+  } finally {
+    setLoading(false);
+  }
+});
+
+btnScanBack.addEventListener('click', () => {
+  panelScan.hidden = true;
+  panelMain.hidden = false;
+  hideMsg(msgScan);
+});
+
+btnScanTailor.addEventListener('click', () => {
+  panelScan.hidden = true;
+  panelMain.hidden = false;
+  btnTailor.click();
+});
+
+// ── Tailor flow ───────────────────────────────────────────────────────────────
 btnTailor.addEventListener('click', async () => {
   hideMsg(msgMain);
   setLoading(true, 'Uploading job…');

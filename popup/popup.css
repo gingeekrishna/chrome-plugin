@@ -259,6 +259,112 @@ button.secondary:hover { background: #e0e0d8; }
 }
 #recs-list li:first-child { border-top: none; }
 
+/* ── Interview prep panel ─────────────────────────────────────────────────── */
+.prep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  width: auto;
+  background: none;
+  border: none;
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.back-link:hover { background: none; opacity: 0.6; }
+
+.prep-job-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prep-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.prep-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.prep-count {
+  font-size: 10px;
+  color: #888;
+  border: 1px solid #ddd;
+  padding: 1px 6px;
+  background: #fff;
+}
+
+.prep-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.prep-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid #e0e0d8;
+  background: #fff;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.prep-num {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: 'Courier New', Courier, monospace;
+  color: #bbb;
+  flex-shrink: 0;
+  padding-top: 1px;
+  min-width: 16px;
+}
+
+.prep-text { flex: 1; }
+
+.prep-chip {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fff;
+  padding: 1px 4px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.prep-chip-beh { background: #7c3aed; }
+.prep-chip-tec { background: #0891b2; }
+.prep-chip-sit { background: #d97706; }
+.prep-chip-gen { background: #555; }
+
 /* ── Loading overlay ──────────────────────────────────────────────────────── */
 #loading-overlay {
   position: fixed;

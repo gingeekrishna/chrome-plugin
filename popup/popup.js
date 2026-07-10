@@ -32,7 +32,16 @@ const msgNoJob          = $('msg-no-job');
 const resumeBadge       = $('resume-badge');
 const badgeResumeId     = $('badge-resume-id');
 const btnTailor         = $('btn-tailor');
+const btnInterviewPrep  = $('btn-interview-prep');
 const msgMain           = $('msg-main');
+
+const panelPrep         = $('panel-prep');
+const prepJobTitle      = $('prep-job-title');
+const prepCount         = $('prep-count');
+const prepList          = $('prep-list');
+const btnPrepBack       = $('btn-prep-back');
+const btnOpenPrep       = $('btn-open-prep');
+const msgPrep           = $('msg-prep');
 
 const resultScore       = $('result-score');
 const resultKeywords    = $('result-keywords');
@@ -72,7 +81,9 @@ function setLoading(on, label = 'Working…') {
 }
 
 function updateTailorBtn() {
-  btnTailor.disabled = !(state.resumeId && state.jobData?.description);
+  const ready = !!(state.resumeId && state.jobData?.description);
+  btnTailor.disabled        = !ready;
+  btnInterviewPrep.disabled = !ready;
 }
 
 const FETCH_TIMEOUT_MS = 120_000; // 2 min — LLM calls can be slow
@@ -189,6 +200,45 @@ function renderResult(data) {
   }
 }
 
+// ── Render — prep panel ───────────────────────────────────────────────────────
+const PREP_PREVIEW = 5;
+
+function renderPrepPanel(questions, jobId) {
+  prepJobTitle.textContent = state.jobData?.title || 'Interview Prep';
+
+  const total = questions.length;
+  prepCount.textContent =
+    total > PREP_PREVIEW ? `${PREP_PREVIEW} of ${total}` : `${total} question${total !== 1 ? 's' : ''}`;
+
+  prepList.innerHTML = '';
+  questions.slice(0, PREP_PREVIEW).forEach((q, i) => {
+    const li = document.createElement('li');
+    li.className = 'prep-item';
+
+    const num = document.createElement('span');
+    num.className = 'prep-num';
+    num.textContent = String(i + 1).padStart(2, '0');
+
+    const text = document.createElement('span');
+    text.className = 'prep-text';
+    text.textContent = typeof q === 'string' ? q : (q.question ?? '');
+
+    li.append(num, text);
+
+    const cat = typeof q === 'object' ? (q.category ?? '').toLowerCase().slice(0, 3) : '';
+    if (cat) {
+      const chip = document.createElement('span');
+      chip.className = `prep-chip prep-chip-${cat}`;
+      chip.textContent = cat.toUpperCase();
+      li.appendChild(chip);
+    }
+
+    prepList.appendChild(li);
+  });
+
+  btnOpenPrep.dataset.jobId = jobId ?? '';
+}
+
 // ── Settings handlers ─────────────────────────────────────────────────────────
 btnSettingsToggle.addEventListener('click', () => {
   panelSettings.hidden = !panelSettings.hidden;
@@ -245,8 +295,61 @@ btnSaveSettings.addEventListener('click', async () => {
   setTimeout(() => { panelSettings.hidden = true; }, 1000);
 });
 
-// ── Tailor flow ───────────────────────────────────────────────────────────────
+// ── Interview prep flow ───────────────────────────────────────────────────────
 const MAX_JD_CHARS = 8000;
+
+btnInterviewPrep.addEventListener('click', async () => {
+  hideMsg(msgMain);
+  setLoading(true, 'Generating questions…');
+
+  let jobId = null;
+  try {
+    const description = state.jobData.description.slice(0, MAX_JD_CHARS);
+    const jobRes = await apiPost('/api/v1/jobs/upload', {
+      job_descriptions: [description],
+      resume_id: state.resumeId,
+    });
+    if (!jobRes.job_id?.length) throw new Error('Backend returned no job ID.');
+    jobId = jobRes.job_id[0];
+
+    const prepRes = await apiPost('/api/v1/interview-prep/questions', {
+      resume_id: state.resumeId,
+      job_id:    jobId,
+    });
+
+    const questions = prepRes.questions ?? prepRes;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error('No questions returned by the backend.');
+    }
+
+    renderPrepPanel(questions, jobId);
+    panelMain.hidden = true;
+    panelPrep.hidden = false;
+  } catch (e) {
+    showMsg(msgMain, `Could not generate questions: ${e.message}`, 'error');
+  } finally {
+    setLoading(false);
+  }
+});
+
+btnPrepBack.addEventListener('click', () => {
+  panelPrep.hidden = true;
+  panelMain.hidden = false;
+  hideMsg(msgPrep);
+});
+
+btnOpenPrep.addEventListener('click', () => {
+  const jobId = btnOpenPrep.dataset.jobId;
+  try {
+    const parsed = new URL(state.backendUrl);
+    const base   = `${parsed.protocol}//${parsed.hostname}:3000`;
+    chrome.tabs.create({ url: jobId ? `${base}/interview-prep?job_id=${jobId}` : `${base}/interview-prep` });
+  } catch {
+    chrome.tabs.create({ url: 'http://localhost:3000/interview-prep' });
+  }
+});
+
+// ── Tailor flow ───────────────────────────────────────────────────────────────
 
 btnTailor.addEventListener('click', async () => {
   hideMsg(msgMain);

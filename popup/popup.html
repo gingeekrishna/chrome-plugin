@@ -53,7 +53,25 @@
       </div>
 
       <button type="button" id="btn-tailor" disabled>Tailor Resume</button>
+      <button type="button" id="btn-interview-prep" class="secondary" disabled>&#127919; Interview Prep</button>
       <p id="msg-main" class="msg" hidden></p>
+    </section>
+
+    <!-- Interview prep panel -->
+    <section id="panel-prep" hidden>
+      <div class="prep-header">
+        <button type="button" id="btn-prep-back" class="back-link">&#8592; Back</button>
+        <span id="prep-job-title" class="prep-job-title"></span>
+      </div>
+      <div class="prep-body">
+        <div class="prep-meta">
+          <span class="prep-section-label">Interview Questions</span>
+          <span id="prep-count" class="prep-count"></span>
+        </div>
+        <ul id="prep-list" class="prep-list"></ul>
+        <button type="button" id="btn-open-prep" class="secondary">View all in Resume Matcher &#8594;</button>
+        <p id="msg-prep" class="msg" hidden></p>
+      </div>
     </section>
 
     <!-- Result panel -->

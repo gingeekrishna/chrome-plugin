@@ -18,21 +18,25 @@
 
       <label for="input-backend-url">Backend URL</label>
       <input id="input-backend-url" type="url" placeholder="http://localhost:8000" />
+      <button type="button" id="btn-save-settings">Save</button>
+      <p id="msg-settings" class="msg" hidden></p>
 
       <div class="divider"></div>
 
-      <label for="input-resume-file">Resume</label>
-      <p class="hint">Upload your master resume once, or paste an existing Resume ID.</p>
+      <h2>Resume Profiles</h2>
+      <ul id="profile-list" class="profile-list"></ul>
+
+      <p class="form-subhead">Add profile</p>
+      <label for="input-profile-name">Profile name</label>
+      <input id="input-profile-name" type="text" placeholder="e.g. SWE Resume" />
+      <label for="input-resume-file">Upload resume</label>
       <input id="input-resume-file" type="file" accept=".pdf,.docx" />
-      <button type="button" id="btn-upload-resume">Upload Resume</button>
-
-      <div class="or-row"><span>or</span></div>
-
+      <button type="button" id="btn-upload-add">Upload &amp; Add</button>
+      <div class="or-row"><span>or paste ID</span></div>
       <label for="input-resume-id">Resume ID</label>
       <input id="input-resume-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-      <button type="button" id="btn-save-settings">Save</button>
-
-      <p id="msg-settings" class="msg" hidden></p>
+      <button type="button" id="btn-add-by-id">Add by ID</button>
+      <p id="msg-add-profile" class="msg" hidden></p>
     </section>
 
     <!-- Main panel -->
@@ -47,10 +51,17 @@
         </p>
       </div>
 
-      <div id="resume-badge" hidden>
-        <span class="badge-label">Resume</span>
-        <span id="badge-resume-id" class="mono"></span>
+      <div id="active-profile-badge" hidden>
+        <div class="apb-left">
+          <span class="apb-dot"></span>
+          <div class="apb-info">
+            <span id="apb-name" class="apb-name"></span>
+            <span id="apb-id" class="apb-id mono"></span>
+          </div>
+        </div>
+        <button type="button" id="btn-switch-profile" class="apb-switch">Switch &#9662;</button>
       </div>
+      <ul id="profile-switcher" class="profile-switcher" hidden></ul>
 
       <button type="button" id="btn-tailor" disabled>Tailor Resume</button>
       <p id="msg-main" class="msg" hidden></p>

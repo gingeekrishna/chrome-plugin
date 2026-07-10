@@ -5,42 +5,54 @@ const DEFAULT_BACKEND = 'http://localhost:8000';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const state = {
-  backendUrl: DEFAULT_BACKEND,
-  resumeId: null,
-  jobData: null,
+  backendUrl:    DEFAULT_BACKEND,
+  profiles:      [],   // [{ name: string, resumeId: string }]
+  activeProfile: 0,    // index into profiles
+  jobData:       null,
 };
+
+function activeResumeId() {
+  return state.profiles[state.activeProfile]?.resumeId ?? null;
+}
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 
-const panelSettings     = $('panel-settings');
-const panelMain         = $('panel-main');
-const panelResult       = $('panel-result');
+const panelSettings       = $('panel-settings');
+const panelMain           = $('panel-main');
+const panelResult         = $('panel-result');
 
-const inputBackendUrl   = $('input-backend-url');
-const inputResumeFile   = $('input-resume-file');
-const inputResumeId     = $('input-resume-id');
-const btnSettingsToggle = $('btn-settings-toggle');
-const btnUploadResume   = $('btn-upload-resume');
-const btnSaveSettings   = $('btn-save-settings');
-const msgSettings       = $('msg-settings');
+const inputBackendUrl     = $('input-backend-url');
+const inputProfileName    = $('input-profile-name');
+const inputResumeFile     = $('input-resume-file');
+const inputResumeId       = $('input-resume-id');
+const btnSettingsToggle   = $('btn-settings-toggle');
+const btnSaveSettings     = $('btn-save-settings');
+const btnUploadAdd        = $('btn-upload-add');
+const btnAddById          = $('btn-add-by-id');
+const msgSettings         = $('msg-settings');
+const msgAddProfile       = $('msg-add-profile');
+const profileListEl       = $('profile-list');
 
-const jobTitleEl        = $('job-title');
-const jobCompanyEl      = $('job-company');
-const jobDescPreview    = $('job-desc-preview');
-const msgNoJob          = $('msg-no-job');
-const resumeBadge       = $('resume-badge');
-const badgeResumeId     = $('badge-resume-id');
-const btnTailor         = $('btn-tailor');
-const msgMain           = $('msg-main');
+const jobTitleEl          = $('job-title');
+const jobCompanyEl        = $('job-company');
+const jobDescPreview      = $('job-desc-preview');
+const msgNoJob            = $('msg-no-job');
+const activeProfileBadge  = $('active-profile-badge');
+const apbName             = $('apb-name');
+const apbId               = $('apb-id');
+const btnSwitchProfile    = $('btn-switch-profile');
+const profileSwitcher     = $('profile-switcher');
+const btnTailor           = $('btn-tailor');
+const msgMain             = $('msg-main');
 
-const resultScore       = $('result-score');
-const resultKeywords    = $('result-keywords');
-const keywordsChips     = $('keywords-chips');
-const resultRecs        = $('result-recs');
-const recsList          = $('recs-list');
-const btnOpenApp        = $('btn-open-app');
-const btnTailorAgain    = $('btn-tailor-again');
+const resultScore         = $('result-score');
+const resultKeywords      = $('result-keywords');
+const keywordsChips       = $('keywords-chips');
+const resultRecs          = $('result-recs');
+const recsList            = $('recs-list');
+const btnOpenApp          = $('btn-open-app');
+const btnTailorAgain      = $('btn-tailor-again');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function showMsg(el, text, type = '') {
@@ -72,10 +84,11 @@ function setLoading(on, label = 'Working…') {
 }
 
 function updateTailorBtn() {
-  btnTailor.disabled = !(state.resumeId && state.jobData?.description);
+  btnTailor.disabled = !(activeResumeId() && state.jobData?.description);
 }
 
-const FETCH_TIMEOUT_MS = 120_000; // 2 min — LLM calls can be slow
+const FETCH_TIMEOUT_MS = 120_000;
+const MAX_JD_CHARS     = 8000;
 
 function fetchWithTimeout(url, options) {
   const controller = new AbortController();
@@ -108,7 +121,10 @@ async function apiPost(path, body) {
 }
 
 async function apiUploadFile(file) {
-  const ALLOWED_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  const ALLOWED_TYPES = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ];
   if (!ALLOWED_TYPES.includes(file.type)) {
     throw new Error('Only PDF and DOCX files are supported.');
   }
@@ -131,16 +147,120 @@ async function apiUploadFile(file) {
   return res.json();
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-function renderResumeId() {
-  if (state.resumeId) {
-    badgeResumeId.textContent = state.resumeId;
-    resumeBadge.hidden = false;
+// ── Profile storage ───────────────────────────────────────────────────────────
+async function persistProfiles() {
+  await chrome.storage.local.set({
+    profiles:           state.profiles,
+    activeProfileIndex: state.activeProfile,
+  });
+}
+
+// ── Render — profiles ─────────────────────────────────────────────────────────
+function renderProfileList() {
+  profileListEl.innerHTML = '';
+  state.profiles.forEach((p, i) => {
+    const li = document.createElement('li');
+    li.className = `profile-item${i === state.activeProfile ? ' active' : ''}`;
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = 'profile-select';
+
+    const radio = document.createElement('span');
+    radio.className = 'profile-radio';
+
+    const info = document.createElement('div');
+    info.className = 'profile-info';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'profile-name';
+    nameEl.textContent = p.name;
+
+    const idEl = document.createElement('span');
+    idEl.className = 'profile-id mono';
+    idEl.textContent = p.resumeId.slice(0, 22) + '…';
+
+    info.append(nameEl, idEl);
+    selectBtn.append(radio, info);
+    selectBtn.addEventListener('click', () => setActiveProfile(i));
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'profile-delete';
+    delBtn.textContent = '✕';
+    delBtn.setAttribute('aria-label', `Remove ${p.name}`);
+    delBtn.addEventListener('click', () => deleteProfile(i));
+
+    li.append(selectBtn, delBtn);
+    profileListEl.appendChild(li);
+  });
+}
+
+function renderActiveBadge() {
+  const profile = state.profiles[state.activeProfile];
+  if (profile) {
+    apbName.textContent = profile.name;
+    apbId.textContent   = profile.resumeId.slice(0, 18) + '…';
+    activeProfileBadge.hidden = false;
   } else {
-    resumeBadge.hidden = true;
+    activeProfileBadge.hidden = true;
   }
 }
 
+function renderSwitcher() {
+  profileSwitcher.innerHTML = '';
+  state.profiles.forEach((p, i) => {
+    const li = document.createElement('li');
+    li.className = `switcher-opt${i === state.activeProfile ? ' active' : ''}`;
+
+    const dot = document.createElement('span');
+    dot.className = 'switcher-dot';
+
+    const name = document.createElement('span');
+    name.className = 'switcher-name';
+    name.textContent = p.name;
+
+    li.append(dot, name);
+    li.addEventListener('click', () => {
+      setActiveProfile(i);
+      profileSwitcher.hidden = true;
+      btnSwitchProfile.textContent = 'Switch ▾';
+    });
+    profileSwitcher.appendChild(li);
+  });
+}
+
+function renderAll() {
+  renderProfileList();
+  renderActiveBadge();
+  renderSwitcher();
+  updateTailorBtn();
+}
+
+// ── Profile actions ───────────────────────────────────────────────────────────
+async function setActiveProfile(index) {
+  state.activeProfile = index;
+  await persistProfiles();
+  renderAll();
+}
+
+async function addProfile(name, resumeId) {
+  state.profiles.push({ name, resumeId });
+  state.activeProfile = state.profiles.length - 1;
+  await persistProfiles();
+  renderAll();
+}
+
+async function deleteProfile(index) {
+  state.profiles.splice(index, 1);
+  if (state.activeProfile >= state.profiles.length) {
+    state.activeProfile = Math.max(0, state.profiles.length - 1);
+  }
+  await persistProfiles();
+  renderAll();
+}
+
+// ── Render — job data & results ───────────────────────────────────────────────
 function renderJobData(job) {
   const hasContent = job?.description?.trim();
   jobTitleEl.textContent     = hasContent ? (job.title   || '(Title not detected)') : '';
@@ -192,63 +312,64 @@ function renderResult(data) {
 // ── Settings handlers ─────────────────────────────────────────────────────────
 btnSettingsToggle.addEventListener('click', () => {
   panelSettings.hidden = !panelSettings.hidden;
-});
-
-btnUploadResume.addEventListener('click', async () => {
-  const file = inputResumeFile.files?.[0];
-  if (!file) {
-    showMsg(msgSettings, 'Select a PDF or DOCX file first.', 'error');
-    return;
-  }
-  hideMsg(msgSettings);
-  setLoading(true, 'Uploading resume…');
-  try {
-    const data = await apiUploadFile(file);
-    const resumeId = data.resume_id;
-    await chrome.storage.local.set({ resumeId });
-    state.resumeId = resumeId;
-    inputResumeId.value = resumeId;
-    showMsg(msgSettings, `Uploaded. Resume ID saved.`, 'success');
-    renderResumeId();
-    updateTailorBtn();
-    setTimeout(() => { panelSettings.hidden = true; }, 1800);
-  } catch (e) {
-    showMsg(msgSettings, `Upload failed: ${e.message}`, 'error');
-  } finally {
-    setLoading(false);
-  }
+  if (!panelSettings.hidden) profileSwitcher.hidden = true;
 });
 
 btnSaveSettings.addEventListener('click', async () => {
-  const resumeId = inputResumeId.value.trim();
-
   const urlResult = parseBackendUrl(inputBackendUrl.value, DEFAULT_BACKEND);
   if (urlResult.error) {
     showMsg(msgSettings, urlResult.error, 'error');
     return;
   }
-  const backendUrl = urlResult.url;
+  state.backendUrl = urlResult.url;
+  inputBackendUrl.value = urlResult.url;
+  await chrome.storage.local.set({ backendUrl: urlResult.url });
+  showMsg(msgSettings, 'Backend URL saved.', 'success');
+  setTimeout(() => hideMsg(msgSettings), 1500);
+});
 
-  if (resumeId && !isValidUuid(resumeId)) {
-    showMsg(msgSettings, 'Resume ID must be a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).', 'error');
-    return;
+btnUploadAdd.addEventListener('click', async () => {
+  const name = inputProfileName.value.trim();
+  const file = inputResumeFile.files?.[0];
+  if (!name) { showMsg(msgAddProfile, 'Enter a profile name.', 'error'); return; }
+  if (!file) { showMsg(msgAddProfile, 'Select a PDF or DOCX file.', 'error'); return; }
+  hideMsg(msgAddProfile);
+  btnUploadAdd.disabled = true;
+  try {
+    const data = await apiUploadFile(file);
+    await addProfile(name, data.resume_id);
+    inputProfileName.value = '';
+    inputResumeFile.value  = '';
+    showMsg(msgAddProfile, `"${name}" uploaded and selected.`, 'success');
+  } catch (e) {
+    showMsg(msgAddProfile, `Upload failed: ${e.message}`, 'error');
+  } finally {
+    btnUploadAdd.disabled = false;
   }
+});
 
-  await chrome.storage.local.set({ backendUrl, resumeId: resumeId || null });
-  state.backendUrl = backendUrl;
-  state.resumeId   = resumeId || null;
-  inputBackendUrl.value = backendUrl;
+btnAddById.addEventListener('click', async () => {
+  const name     = inputProfileName.value.trim();
+  const resumeId = inputResumeId.value.trim();
+  if (!name)               { showMsg(msgAddProfile, 'Enter a profile name.', 'error'); return; }
+  if (!isValidUuid(resumeId)) { showMsg(msgAddProfile, 'Resume ID must be a valid UUID.', 'error'); return; }
+  await addProfile(name, resumeId);
+  inputProfileName.value = '';
+  inputResumeId.value    = '';
+  showMsg(msgAddProfile, `"${name}" added and selected.`, 'success');
+});
 
-  showMsg(msgSettings, 'Settings saved.', 'success');
-  renderResumeId();
-  updateTailorBtn();
-  setTimeout(() => { panelSettings.hidden = true; }, 1000);
+// ── Profile switcher (main panel) ─────────────────────────────────────────────
+btnSwitchProfile.addEventListener('click', () => {
+  const opening = profileSwitcher.hidden;
+  profileSwitcher.hidden = !opening;
+  btnSwitchProfile.innerHTML = opening ? 'Switch &#9652;' : 'Switch &#9662;';
 });
 
 // ── Tailor flow ───────────────────────────────────────────────────────────────
-const MAX_JD_CHARS = 8000;
-
 btnTailor.addEventListener('click', async () => {
+  profileSwitcher.hidden = true;
+  btnSwitchProfile.innerHTML = 'Switch &#9662;';
   hideMsg(msgMain);
   setLoading(true, 'Uploading job…');
 
@@ -257,14 +378,14 @@ btnTailor.addEventListener('click', async () => {
     const description = state.jobData.description.slice(0, MAX_JD_CHARS);
     const jobRes = await apiPost('/api/v1/jobs/upload', {
       job_descriptions: [description],
-      resume_id: state.resumeId,
+      resume_id: activeResumeId(),
     });
     if (!jobRes.job_id?.length) throw new Error('Backend returned no job ID.');
     jobId = jobRes.job_id[0];
 
     setLoading(true, 'Tailoring resume…');
     const improveRes = await apiPost('/api/v1/resumes/improve', {
-      resume_id: state.resumeId,
+      resume_id: activeResumeId(),
       job_id:    jobId,
     });
 
@@ -295,7 +416,6 @@ btnOpenApp.addEventListener('click', () => {
 btnTailorAgain.addEventListener('click', () => {
   panelResult.hidden = true;
   panelMain.hidden   = false;
-  // Re-extract job from the active tab so stale job data doesn't linger
   chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
     if (!tab?.id) return;
     chrome.scripting
@@ -314,17 +434,30 @@ btnTailorAgain.addEventListener('click', () => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  const stored = await chrome.storage.local.get(['backendUrl', 'resumeId']);
+  const stored = await chrome.storage.local.get([
+    'backendUrl', 'profiles', 'activeProfileIndex',
+    'resumeId',  // legacy key — migrate below
+  ]);
+
   state.backendUrl = stored.backendUrl || DEFAULT_BACKEND;
-  state.resumeId   = stored.resumeId  || null;
-
   inputBackendUrl.value = state.backendUrl;
-  if (state.resumeId) inputResumeId.value = state.resumeId;
 
-  renderResumeId();
+  // Migrate legacy single resumeId → profiles array
+  if (!stored.profiles && stored.resumeId) {
+    state.profiles = [{ name: 'Default', resumeId: stored.resumeId }];
+    await chrome.storage.local.set({ profiles: state.profiles, activeProfileIndex: 0 });
+    await chrome.storage.local.remove('resumeId');
+  } else {
+    state.profiles = stored.profiles || [];
+  }
+
+  state.activeProfile = stored.activeProfileIndex ?? 0;
+  if (state.activeProfile >= state.profiles.length) state.activeProfile = 0;
+
+  renderAll();
 
   // First-time setup: open settings automatically
-  if (!state.resumeId) panelSettings.hidden = false;
+  if (state.profiles.length === 0) panelSettings.hidden = false;
 
   // Extract job description from the active tab
   try {
@@ -337,7 +470,6 @@ async function init() {
       state.jobData = result?.result ?? null;
     }
   } catch (e) {
-    // Tab is a browser-internal page (chrome://, etc.) or scripting is blocked
     if (!e.message?.includes('Cannot access')) {
       console.warn('[Resume Matcher] Job extraction failed:', e.message);
     }

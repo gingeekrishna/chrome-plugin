@@ -1,15 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Resume Matcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Detect job descriptions on job boards and tailor your resume in one click.",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "storage", "scripting", "sidePanel", "tabs"],
   "host_permissions": [
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html"
+  },
   "action": {
-    "default_popup": "popup/popup.html",
     "default_title": "Resume Matcher"
   }
 }

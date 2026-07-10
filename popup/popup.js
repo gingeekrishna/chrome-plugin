@@ -348,3 +348,40 @@ async function init() {
 }
 
 init();
+
+// ── Tab navigation (side panel) ────────────────────────────────────────────────
+async function refreshFromTab(tabId) {
+  // If the result panel is showing, go back to main so it reflects the new job
+  if (!panelResult.hidden) {
+    panelResult.hidden = true;
+    panelMain.hidden = false;
+  }
+  hideMsg(msgMain);
+  state.jobData = null;
+  renderJobData(null);
+  updateTailorBtn();
+
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: extractJobFromPage,
+    });
+    state.jobData = result?.result ?? null;
+  } catch {
+    // Browser-internal page (chrome://, new tab, etc.) — leave jobData null
+  }
+  renderJobData(state.jobData);
+  updateTailorBtn();
+}
+
+// User switches to a different tab
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  refreshFromTab(tabId);
+});
+
+// User navigates within the current tab (e.g. LinkedIn job → another job)
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (changeInfo.status !== 'complete') return;
+  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (active?.id === tabId) refreshFromTab(tabId);
+});
